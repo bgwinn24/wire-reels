@@ -1,8 +1,8 @@
 // Wire Reels v2 — conveyor sort puzzle. All art drawn in code.
 (()=>{
 const VW=390,VH=844,cv=document.getElementById('c'),ui=document.getElementById('ui');let cx=cv.getContext('2d');
-const PAL=WR.PALETTE,SPEED=13,BELT_MAX=5,FLY=0.38;
-const Q=new URLSearchParams(location.search),AUTO=Q.get('auto');
+const PAL=WR.PALETTE,SPEED=150,BELT_MAX=5,FLY=0.38;
+const Q=new URLSearchParams(location.search),DEV=Q.get('dev')==='wr',AUTO=DEV&&Q.get('auto');
 let scale=1,ox=0,oy=0;
 function resize(){const d=devicePixelRatio||1,w=innerWidth,h=innerHeight;scale=Math.min(w/VW,h/VH);ox=(w-VW*scale)/2;oy=(h-VH*scale)/2;
  cv.width=w*d;cv.height=h*d;cv.style.width=w+'px';cv.style.height=h+'px';cx.setTransform(d*scale,0,0,d*scale,d*ox,d*oy)}
@@ -11,21 +11,21 @@ addEventListener('resize',resize);resize();
 const SK='wirereels.v2';let prog;try{prog=JSON.parse(localStorage.getItem(SK))||{}}catch(e){prog={}}
 prog.unlocked=prog.unlocked||1;prog.stars=prog.stars||{};const save=()=>{try{localStorage.setItem(SK,JSON.stringify(prog))}catch(e){}};
 const NS=SHIPPED.length;
-function levelData(i){if(i<NS){const s=SHIPPED[i],p=WR.PICTURES[s.pic],{W,H,g}=WR.parse(p[1],false,p[2]);return{name:s.name,W,H,g,lanes:s.lanes}}
+function levelData(i){if(i<NS){const s=SHIPPED[i],{W,H,g}=WR.parse(WR.PICTURES[s.pic],false);return{W,H,g,lanes:s.lanes}}
  return WR.makeLevel(i,{tries:10,trials:16,limit:20000})||levelData(i%NS)}
 // ---------- game state ----------
 let S=null,mood={kind:'idle',t:0},time=0;
-function start(i){const L=levelData(i);S={i,name:L.name,W:L.W,H:L.H,g:L.g.slice(),orig:L.g.slice(),lanes:L.lanes.map(l=>l.map(r=>({...r}))),li:L.lanes.map(()=>0),
+function start(i){const L=levelData(i);S={i,W:L.W,H:L.H,g:L.g.slice(),orig:L.g.slice(),lanes:L.lanes.map(l=>l.map(r=>({...r}))),li:L.lanes.map(()=>0),
  rack:[null,null,null,null,null],belt:[],queue:[],fly:[],fx:[],state:'play',t:0,peak:0,shake:{}};
- const cs=Math.min(290/S.W,290/S.H);S.cs=cs;S.bx=195-cs*S.W/2;S.by=257-cs*S.H/2;S.L=WR.beltLen(S.W,S.H);hide();mood={kind:'idle',t:0}}
-// belt geometry
-const BT=90,BB=424,BLx=28,BRx=362;
-function bp(p){const{W,H,cs,bx,by}=S;p=((p%S.L)+S.L)%S.L;
- if(p<W)return[bx+(p+.5)*cs,BT];if(p<W+H)return[BRx,by+(p-W+.5)*cs];if(p<2*W+H)return[bx+(2*W+H-1-p+.5)*cs,BB];return[BLx,by+(2*W+2*H-1-p+.5)*cs]}
-function side(p){const{W,H}=S;p=((p%S.L)+S.L)%S.L;return p<W?0:p<W+H?1:p<2*W+H?2:3}
-const CORN=[[BRx,BT],[BRx,BB],[BLx,BB],[BLx,BT]];
-function belt(f){const i=Math.floor(f),t=f-i,a=bp(i),b=bp(i+1);if(side(i)!==side(i+1)){const c=CORN[side(i)];return t<.5?lerp(a,c,t*2):lerp(c,b,t*2-1)}return lerp(a,b,t)}
-const lerp=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
+ const cs=Math.min(290/S.W,290/S.H);S.cs=cs;S.bx=195-cs*S.W/2;S.by=257-cs*S.H/2;S.L=WR.beltLen(S.W,S.H);S.sp=[];for(let p=0;p<S.L;p++)S.sp.push(sOf(p));hide();mood={kind:'idle',t:0}}
+// belt geometry: rounded-rect path parameterised by arc length (constant speed, smooth corners)
+const BT=90,BB=424,BLx=28,BRx=362,CR=22,QA=Math.PI*CR/2,SA=BRx-BLx-2*CR,SB=BB-BT-2*CR,PER=2*SA+2*SB+4*QA;
+function sOf(p){const{W,H,cs,bx,by}=S;if(p<W)return bx+(p+.5)*cs-(BLx+CR);if(p<W+H)return SA+QA+by+(p-W+.5)*cs-(BT+CR);
+ if(p<2*W+H)return 2*SA+SB+2*QA+(BRx-CR)-(bx+(2*W+H-1-p+.5)*cs);return 2*SA+2*SB+3*QA+(BB-CR)-(by+(2*W+2*H-1-p+.5)*cs)}
+function belt(s){s=((s%PER)+PER)%PER;const segs=[[SA,0],[QA,1],[SB,0],[QA,1],[SA,0],[QA,1],[SB,0],[QA,1]];
+ const st=[[BLx+CR,BT,0],[BRx-CR,BT+CR,-Math.PI/2],[BRx,BT+CR,Math.PI/2],[BRx-CR,BB-CR,0],[BRx-CR,BB,Math.PI],[BLx+CR,BB-CR,Math.PI/2],[BLx,BB-CR,-Math.PI/2],[BLx+CR,BT+CR,Math.PI]];
+ for(let i=0;i<8;i++){const[len,arc]=segs[i];if(s<=len||i===7){const t=Math.min(s,len);if(!arc){const a=st[i][2];return[st[i][0]+Math.cos(a)*t,st[i][1]+Math.sin(a)*t,a]}
+   const[cx0,cy0,a0]=st[i],a=a0+t/CR;return[cx0+Math.cos(a)*CR,cy0+Math.sin(a)*CR,a+Math.PI/2]}s-=len}}
 const cellXY=i=>[S.bx+(i%S.W+.5)*S.cs,S.by+(Math.floor(i/S.W)+.5)*S.cs];
 // ---------- input ----------
 const RACKX=i=>128+i*52,RACKY=486,LANEX=i=>52+i*95,LANEY=598;
@@ -37,12 +37,12 @@ cv.addEventListener('pointerdown',e=>{const x=(e.clientX-ox)/scale,y=(e.clientY-
 function send(r,id,take){if(S.belt.length+S.queue.length>=BELT_MAX){S.shake[id]=time;return}take();S.queue.push({c:r.c,n:r.n,f:0,trav:0,pop:-1,bob:Math.random()*6})}
 // ---------- update ----------
 function step(dt){if(!S)return;time+=dt;S.t+=dt;mood.t+=dt;
- if(S.queue.length&&!S.belt.some(r=>r.trav<1.7)){S.belt.push(S.queue.shift())}
+ if(S.queue.length&&!S.belt.some(r=>r.trav<44)){S.belt.push(S.queue.shift())}
  for(const r of S.belt){if(r.pop>=0){r.pop+=dt;continue}const prev=r.trav;r.trav+=SPEED*dt;
-  for(let k=Math.floor(prev)+1;k<=Math.floor(r.trav)&&k<S.L&&r.n>0;k++){const t=WR.target(S.g,S.W,S.H,k);
+  for(let k=0;k<S.L&&r.n>0;k++){if(!(S.sp[k]>prev&&S.sp[k]<=r.trav))continue;const t=WR.target(S.g,S.W,S.H,k);
    if(t>=0&&S.g[t]===r.c){S.g[t]=0;r.n--;r.pend=(r.pend||0)+1;S.fly.push({c:r.c,from:cellXY(t),r,t:0})}}
-  if(r.n===0&&!r.pend&&r.pop<0){r.pop=0;burst(belt(r.trav),r.c);if(S.state==='play')mood={kind:'happy',t:0}}
-  if(r.trav>=S.L&&r.n>0&&!r.pend){r.gone=1;const s=S.rack.indexOf(null);if(s<0){lose();return}S.rack[s]={c:r.c,n:r.n}}}
+  if(r.n===0&&!r.pend&&r.pop<0){r.pop=0;burst(belt(r.trav).slice(0,2),r.c);if(S.state==='play')mood={kind:'happy',t:0}}
+  if(r.trav>=PER&&r.n>0&&!r.pend){r.gone=1;const s=S.rack.indexOf(null);if(s<0){lose();return}S.rack[s]={c:r.c,n:r.n}}}
  S.belt=S.belt.filter(r=>!r.gone&&!(r.pop>0.35));
  for(const f of S.fly){f.t+=dt/FLY;if(f.t>=1&&!f.done){f.done=1;f.r.pend--}}S.fly=S.fly.filter(f=>!f.done);
  for(const p of S.fx)p.t+=dt;S.fx=S.fx.filter(p=>p.t<p.life);
@@ -63,12 +63,12 @@ function header(){rr(6,6,378,54,14);cx.fillStyle='#f7ecd6';cx.fill();cx.strokeSt
  btn(332,13,44,40);cx.strokeStyle='#6b4325';cx.lineWidth=4;cx.beginPath();cx.arc(354,33,10,.6,5.6);cx.stroke();cx.beginPath();cx.moveTo(361,17);cx.lineTo(363,27);cx.lineTo(353,26);cx.fillStyle='#6b4325';cx.fill();
  cx.fillStyle='#5a3418';cx.font='bold 25px Georgia,serif';cx.textAlign='left';cx.fillText('Wire Reels',68,42);
  rr(214,15,110,36,10);cx.fillStyle='#fffaf0';cx.fill();cx.strokeStyle='#c49a6c';cx.lineWidth=1.5;cx.stroke();cx.fillStyle='#5a3418';cx.textAlign='center';
- cx.font='bold 13px sans-serif';cx.fillText('Level '+(S.i+1),269,30);cx.font='11px sans-serif';cx.fillText(S.name,269,45)}
+ cx.font='bold 13px sans-serif';cx.font='bold 16px sans-serif';cx.fillText('Level '+(S.i+1),269,39)}
 function btn(x,y,w,h){rr(x,y,w,h,10);cx.fillStyle='#fff6e6';cx.fill();cx.strokeStyle='#a87b4f';cx.lineWidth=2;cx.stroke()}
 function frame(){// metal frame + belt
  rr(10,72,370,370,22);cx.fillStyle='#4a4f57';cx.fill();rr(10,72,370,370,22);cx.strokeStyle='#2c3036';cx.lineWidth=3;cx.stroke();
- cx.strokeStyle='#6f757d';cx.lineWidth=26;rr(BLx,BT,BRx-BLx,BB-BT,14);cx.stroke();
- cx.save();cx.setLineDash([3,9]);cx.lineDashOffset=-time*SPEED*S.cs;cx.strokeStyle='#565b62';cx.lineWidth=22;rr(BLx,BT,BRx-BLx,BB-BT,14);cx.stroke();cx.restore();
+ cx.strokeStyle='#6f757d';cx.lineWidth=26;rr(BLx,BT,BRx-BLx,BB-BT,CR);cx.stroke();
+ cx.save();cx.setLineDash([3,9]);cx.lineDashOffset=-time*SPEED;cx.strokeStyle='#565b62';cx.lineWidth=22;rr(BLx,BT,BRx-BLx,BB-BT,CR);cx.stroke();cx.restore();
  cx.strokeStyle='#8c939b';cx.lineWidth=1.5;rr(BLx-13,BT-13,BRx-BLx+26,BB-BT+26,24);cx.stroke();rr(BLx+13,BT+13,BRx-BLx-26,BB-BT-26,6);cx.stroke();
  for(const[x,y]of[[22,84],[368,84],[22,430],[368,430]]){cx.fillStyle='#9aa0a7';cx.beginPath();cx.arc(x,y,8,0,7);cx.fill();cx.fillStyle='#5d636b';cx.beginPath();cx.arc(x,y,3.5,0,7);cx.fill()}
  rr(44,106,302,302,6);cx.fillStyle='#1d2127';cx.fill();
@@ -82,17 +82,17 @@ function board(){const reveal=S.state!=='play',g=reveal?S.orig:S.g;
  if(reveal){cx.save();cx.shadowColor='#ffd54a';cx.shadowBlur=18+8*Math.sin(time*6)}
  for(let i=0;i<g.length;i++)if(g[i]){const[x,y]=cellXY(i);stitch(x,y,g[i],S.cs,reveal)}if(reveal)cx.restore()}
 function reel(x,y,s,c,n,opt={}){// s = width
- const w=s,h=s*.78,fl=s*.16,col=PAL[c];cx.save();cx.translate(x,y);if(opt.rot)cx.rotate(opt.rot);const k=opt.k||1;cx.scale(k,k);
+ const w=s,h=s*.78,fl=s*.16,col=PAL[c];cx.save();cx.translate(x,y);const k=opt.k||1;cx.scale(k,k);if(opt.rot)cx.rotate(opt.rot);
  if(opt.hi){cx.shadowColor='#ffcf4d';cx.shadowBlur=16}
  cx.fillStyle='#7a4a26';cx.beginPath();cx.ellipse(0,h/2,w/2,fl,0,0,7);cx.fill();cx.shadowBlur=0;
  cx.fillStyle=shade(col,-.2);cx.fillRect(-w*.42,-h/2,w*.84,h);
  cx.strokeStyle=shade(col,.25);cx.lineWidth=Math.max(1,s*.035);for(let i=1;i<7;i++){const yy=-h/2+i*h/7;cx.beginPath();cx.moveTo(-w*.42,yy);cx.quadraticCurveTo(0,yy+s*.05,w*.42,yy);cx.stroke()}
  cx.fillStyle='rgba(0,0,0,.18)';cx.fillRect(w*.22,-h/2,w*.2,h);
  cx.fillStyle='#c58b52';cx.beginPath();cx.ellipse(0,-h/2,w/2,fl,0,0,7);cx.fill();cx.fillStyle='#e0aa70';cx.beginPath();cx.ellipse(0,-h/2-1,w/2-2,fl-2,0,0,7);cx.fill();
- if(n!=null){cx.fillStyle='#fffaf0';cx.beginPath();cx.ellipse(0,-h/2-1,w*.27,fl*.8,0,0,7);cx.fill();cx.fillStyle=shade(col,-.45);cx.font=`bold ${Math.round(s*.3)}px sans-serif`;cx.textAlign='center';cx.textBaseline='middle';cx.fillText(n,0,-h/2);cx.textBaseline='alphabetic'}
+ if(opt.rot){cx.rotate(-opt.rot);cx.translate(0,h/2)}if(n!=null){cx.fillStyle='#fffaf0';cx.beginPath();cx.ellipse(0,-h/2-1,w*.27,fl*.8,0,0,7);cx.fill();cx.fillStyle=shade(col,-.45);cx.font=`bold ${Math.round(s*.3)}px sans-serif`;cx.textAlign='center';cx.textBaseline='middle';cx.fillText(n,0,-h/2);cx.textBaseline='alphabetic'}
  cx.restore()}
-function beltReels(){for(const r of S.belt){const[x,y]=belt(r.trav);const k=r.pop>=0?1+r.pop*2.5:1;cx.globalAlpha=r.pop>=0?Math.max(0,1-r.pop/.35):1;reel(x,y+4,32,r.c,r.n,{k});cx.globalAlpha=1}}
-function flies(){for(const f of S.fly){const to=belt(f.r.trav),t=f.t,e=t*t*(3-2*t),x=f.from[0]+(to[0]-f.from[0])*e,y=f.from[1]+(to[1]-f.from[1])*e-Math.sin(t*3.14)*30;
+function beltReels(){for(const r of S.belt){const[x,y,a]=belt(r.trav);const k=r.pop>=0?1+r.pop*2.5:1;cx.globalAlpha=r.pop>=0?Math.max(0,1-r.pop/.35):1;reel(x,y,30,r.c,r.n,{k,rot:a});cx.globalAlpha=1}}
+function flies(){for(const f of S.fly){const to=belt(f.r.trav).slice(0,2),t=f.t,e=t*t*(3-2*t),x=f.from[0]+(to[0]-f.from[0])*e,y=f.from[1]+(to[1]-f.from[1])*e-Math.sin(t*3.14)*30;
  cx.strokeStyle=PAL[f.c];cx.lineWidth=2.5;cx.globalAlpha=.7;cx.beginPath();cx.moveTo(f.from[0],f.from[1]);cx.quadraticCurveTo((f.from[0]+x)/2,(f.from[1]+y)/2-20,x,y);cx.stroke();cx.globalAlpha=1;stitch(x,y,f.c,S.cs*(1-.4*t))}}
 function effects(){for(const p of S.fx){const a=1-p.t/p.life;if(p.ring){cx.strokeStyle=PAL[p.c];cx.globalAlpha=a;cx.lineWidth=5*a;cx.beginPath();cx.arc(p.x,p.y,8+p.t*90,0,7);cx.stroke();cx.globalAlpha=1;continue}
  cx.fillStyle=PAL[p.c];cx.globalAlpha=a;cx.beginPath();cx.arc(p.x+p.vx*p.t,p.y+p.vy*p.t+120*p.t*p.t,3.5,0,7);cx.fill();cx.globalAlpha=1}}
@@ -103,7 +103,8 @@ function lanes(){rr(8,536,374,300,14);cx.fillStyle='#6d4426';cx.fill();
  for(let i=0;i<4;i++){const x=LANEX(i);rr(x-44,546,88,282,10);cx.fillStyle='#4a2f1a';cx.fill();
   const l=S.lanes[i],st=S.li[i];const sh=S.shake['l'+i]&&time-S.shake['l'+i]<.3?Math.sin(time*60)*3:0;
   for(let j=Math.min(l.length-1,st+3);j>=st;j--){const d=j-st;reel(x+(d?0:sh),LANEY+d*64,d?62:70,l[j].c,d?null:l[j].n,{hi:!d&&S.state==='play'})}
-  if(l.length-st>4){cx.fillStyle='#f3e3c4';cx.font='bold 13px sans-serif';cx.textAlign='center';cx.fillText('+'+(l.length-st-4),x,822)}}}
+  for(let j=st+1;j<=Math.min(l.length-1,st+3);j++){const y=LANEY+(j-st)*64+10;cx.fillStyle='#fffaf0';cx.beginPath();cx.roundRect(x-15,y-10,30,20,9);cx.fill();cx.strokeStyle=shade(PAL[l[j].c],-.3);cx.lineWidth=1.5;cx.stroke();cx.fillStyle=shade(PAL[l[j].c],-.5);cx.font='bold 14px sans-serif';cx.textAlign='center';cx.textBaseline='middle';cx.fillText(l[j].n,x,y+1);cx.textBaseline='alphabetic'}
+  if(l.length-st>4){cx.fillStyle='#f3e3c4';cx.font='bold 13px sans-serif';cx.textAlign='center';cx.fillText('+'+(l.length-st-4)+' more',x,824)}}}
 // ---------- mascot: little light-bulb helper ----------
 function bulb(x,y,s,kind,t){cx.save();cx.translate(x,y);cx.scale(s,s);
  let bob=Math.sin(t*3)*2,glow=.25,arm=0.4;if(kind==='happy'){bob=-Math.abs(Math.sin(t*9))*10;glow=.8;arm=-1}if(kind==='win'){bob=-Math.abs(Math.sin(t*7))*12;glow=1;arm=-1.3}
@@ -138,16 +139,16 @@ function show(h){ui.innerHTML=h;ui.style.display='flex'}function hide(){ui.style
 const stars=n=>'<div class="stars">'+[1,2,3].map(i=>`<span class="${i<=n?'on':''}">★</span>`).join('')+'</div>';
 function win(){const st=S.peak<=2?3:S.peak<=4?2:1;prog.stars[S.i]=Math.max(prog.stars[S.i]||0,st);prog.unlocked=Math.max(prog.unlocked,S.i+2);save();
  if(S.i===NS-1&&!prog.allDone){prog.allDone=1;save();show(`<div class="card"><canvas id="mb" data-k="win" width="120" height="110"></canvas><h2>All ${NS} pictures wired!</h2><p>Every crafted level is done. Your bulb buddy is beaming.</p>${stars(st)}<button data-a="next">Endless mode ▶</button><button data-a="menu" class="alt">Levels</button></div>`);return}
- show(`<div class="card"><canvas id="mb" data-k="win" width="120" height="110"></canvas><h2>${S.name} complete!</h2>${stars(st)}<p>Rack peak: ${S.peak}/5</p><button data-a="next">Next level ▶</button><button data-a="menu" class="alt">Levels</button></div>`)}
+ show(`<div class="card"><canvas id="mb" data-k="win" width="120" height="110"></canvas><h2>Level ${S.i+1} complete!</h2>${stars(st)}<p>Rack peak: ${S.peak}/5</p><button data-a="next">Next level ▶</button><button data-a="menu" class="alt">Levels</button></div>`)}
 function lose(){if(S.state!=='play')return;S.state='lost';mood={kind:'worried',t:0};show(`<div class="card"><canvas id="mb" data-k="worried" width="120" height="110"></canvas><h2>Rack overloaded!</h2><p>No room left for that reel. Plan which lane to pull from.</p><button data-a="retry">Try again</button><button data-a="menu" class="alt">Levels</button></div>`)}
 function menu(){const n=Math.max(NS,prog.unlocked);let h='<div class="card wide"><h2>Pick a picture</h2><div class="grid">';
- for(let i=0;i<n;i++){const lock=i+1>prog.unlocked;h+=`<button class="lv" ${lock?'disabled':''} data-l="${i}">${i+1}<small>${i<NS?SHIPPED[i].name:'Endless'}</small><i>${'★'.repeat(prog.stars[i]||0)}</i></button>`}
+ for(let i=0;i<n;i++){const lock=i+1>prog.unlocked;h+=`<button class="lv" ${lock?'disabled':''} data-l="${i}">${i+1}<small>${i<NS?'':'Endless'}</small><i>${'★'.repeat(prog.stars[i]||0)}</i></button>`}
  show(h+'</div></div>')}
 ui.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const a=b.dataset.a;
  if(b.dataset.l)start(+b.dataset.l);else if(a==='next')start(S.i+1);else if(a==='retry')start(S.i);else if(a==='menu')menu()});
 // ---------- loop ----------
 let last=performance.now();function frameLoop(now){const dt=Math.min(.05,(now-last)/1000);last=now;step(dt*(AUTO==='win'?3:1));draw();requestAnimationFrame(frameLoop)}
-start(Q.has('level')?Math.max(0,+Q.get('level')-1):Math.min(prog.unlocked-1,NS-1));requestAnimationFrame(frameLoop);
+start(DEV&&Q.has('level')?Math.max(0,+Q.get('level')-1):Math.min(prog.unlocked-1,NS-1));requestAnimationFrame(frameLoop);
 // demo modes used for headless screenshots
 if(AUTO==='play'){const go=()=>{const i=S.lanes.findIndex((l,i)=>{const r=l[S.li[i]];return r&&WR.lap(S.g.slice(),S.W,S.H,r.c,r.n)<r.n});if(i>=0)send(S.lanes[i][S.li[i]],'l'+i,()=>S.li[i]++)};setTimeout(go,300);setTimeout(go,1100)}
 if(AUTO==='win'){const tick=()=>{if(S.state!=='play')return;if(!S.belt.length&&!S.queue.length){let best=null;
