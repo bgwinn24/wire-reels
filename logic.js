@@ -40,8 +40,9 @@ function randomWinRate(lv,trials,r){let w=0;for(let t=0;t<trials;t++){let st={g:
 function build(pic,seed,diff,mirror,opts={}){const{W,H,g}=parse(pic,mirror),r=rng(seed*2654435761+7);
  const cnt={};g.forEach(c=>{if(c)cnt[c]=(cnt[c]||0)+1});
  const total=g.filter(Boolean).length,avg=total/opts.reels,reels=[];
- const CAPS=[4,6,8,10,12,14,16,18,20,24,28,32].filter(c=>c>=Math.max(4,avg*(.5+diff*.5))&&c<=avg*(1.6+diff));const caps=CAPS.length?CAPS:[Math.round(avg)];
- for(const c in cnt){let n=cnt[c];while(n>0){let sz=caps[Math.floor(Math.pow(r(),0.7)*caps.length)];if(sz>=n||n-sz<4)sz=n;reels.push({c,n:sz});n-=sz}}
+ // size mix: ~25% small (2-6), ~55% mid, ~20% large; exact colour totals preserved
+ const pick=()=>{const u=r();return u<.25?2+Math.floor(r()*5):u<.8?Math.max(4,Math.round(avg*(.7+r()*.6))):Math.round(avg*(1.4+r()*.8))};
+ for(const c in cnt){let n=cnt[c];while(n>0){let sz=pick();if(sz>=n||n-sz<2)sz=n;reels.push({c,n:sz});n-=sz}}
  // easy order: colours roughly in the order they become reachable; shuffle more as diff rises
  const gg=g.slice(),order=[];for(let k=0;k<2000&&gg.some(v=>v);k++){const L=beltLen(W,H);for(let p=0;p<L;p++){const t=target(gg,W,H,p);if(t>=0){order.push(gg[t]);gg[t]=0;break}}}
  const firstSeen=c=>order.indexOf(c);const h=Math.min(1,diff*2.2);reels.forEach(x=>{const f=firstSeen(x.c)/order.length;x.k=f*(1-2*h)+r()*(0.15+Math.min(h,1-h)*0.8)});
@@ -51,7 +52,7 @@ function build(pic,seed,diff,mirror,opts={}){const{W,H,g}=parse(pic,mirror),r=rn
 function makeLevel(idx,opts={}){const pics=P.PICTURES,np=pics.length,pic=pics[opts.pic!=null?opts.pic:idx%np],cycle=Math.floor(idx/np);
  const t=Math.min(1,idx/(np-1)),diff=Math.min(1,0.02+t*0.85+cycle*0.08),target=Math.max(0.03,0.95-t*0.9-cycle*0.05);
  const tries=opts.tries||24,r=rng(idx+99);let best=null;
- for(let s=1;s<=tries;s++){const lv=build(pic,idx*1000+s,diff,cycle%2===1,{reels:Math.round(22+t*42+cycle*4)});lv.rack=t<0.12?5:[5,4,3][s%3];if(lv.lanes.some(l=>!l.length))continue;
+ for(let s=1;s<=tries;s++){const RT=Math.round(40+t*25+cycle*5),lv=build(pic,idx*1000+s,diff,cycle%2===1,{reels:RT*(0.8+0.1*(s%5))});const nr=lv.lanes.flat().length;if(Math.abs(nr-RT)>5)continue;lv.rack=t<0.12?5:[5,4,3][s%3];if(lv.lanes.some(l=>!l.length))continue;
   const so=solve(lv,opts.limit||60000);if(!so.ok)continue;const wr=randomWinRate(lv,opts.trials||60,r);const sc=Math.abs(wr-target);
   if(!best||sc<best.sc){best={lv,sc,wr,nodes:so.nodes,moves:so.path.length}}if(sc<0.04)break}
  if(!best)return null;Object.assign(best.lv,{index:idx,winRate:best.wr,solverNodes:best.nodes,solutionMoves:best.moves,targetRate:target});return best.lv}
