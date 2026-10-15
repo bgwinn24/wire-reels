@@ -50,10 +50,11 @@ function build(pic,seed,diff,mirror,opts={}){const{W,H,g}=parse(pic,mirror),r=rn
  return{name:pic[0],W,H,g,lanes,seed,diff}}
 // pick, among seeds, a winnable layout whose random-play win rate is near the target
 function makeLevel(idx,opts={}){const pics=P.PICTURES,np=pics.length,pic=pics[opts.pic!=null?opts.pic:idx%np],cycle=Math.floor(idx/np);
- const t=Math.min(1,idx/(np-1)),diff=Math.min(1,0.02+t*0.85+cycle*0.08),target=Math.max(0.03,0.95-t*0.9-cycle*0.05);
+ // sawtooth: each block of 10 ramps easy->hard; every block starts and peaks a bit harder than the last
+ const blk=Math.floor(idx/10),t=(idx%10)/9,diff=opts.diff!=null?opts.diff:Math.min(1,0.02+blk*0.06+t*0.85),st0=Math.max(0.5,0.97-blk*0.06),pk=Math.max(0.02,0.12-blk*0.03),target=st0+(pk-st0)*t;
  const tries=opts.tries||24,r=rng(idx+99);let best=null;
- for(let s=1;s<=tries;s++){const RT=Math.round(40+t*25+cycle*5),lv=build(pic,idx*1000+s,diff,cycle%2===1,{reels:RT*(0.8+0.1*(s%5))});const nr=lv.lanes.flat().length;if(Math.abs(nr-RT)>5)continue;lv.rack=t<0.12?5:[5,4,3][s%3];if(lv.lanes.some(l=>!l.length))continue;
-  const so=solve(lv,opts.limit||60000);if(!so.ok)continue;const wr=randomWinRate(lv,opts.trials||60,r);const sc=Math.abs(wr-target);
+ for(let s=1;s<=tries;s++){const RT=Math.round(40+Math.min(idx,40)*0.65+t*6),lv=build(pic,idx*1000+s+(opts.seedBase||0)*100000,diff,cycle%2===1,{reels:RT*(0.8+0.1*(s%5))});const nr=lv.lanes.flat().length;if(Math.abs(nr-RT)>5)continue;lv.rack=t<0.12?5:[5,4,3][s%3];if(lv.lanes.some(l=>!l.length))continue;
+  const so=solve(lv,opts.limit||60000);if(!so.ok)continue;const wr=randomWinRate(lv,opts.trials||60,r);if(opts.accept&&!opts.accept(wr))continue;const sc=Math.abs(wr-target);
   if(!best||sc<best.sc){best={lv,sc,wr,nodes:so.nodes,moves:so.path.length}}if(sc<0.04)break}
  if(!best)return null;Object.assign(best.lv,{index:idx,winRate:best.wr,solverNodes:best.nodes,solutionMoves:best.moves,targetRate:target});return best.lv}
 // ---- belt geometry (virtual 390x844 layout) ----
