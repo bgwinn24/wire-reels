@@ -1,3 +1,13 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
-<link rel="icon" href="data:,"><title>Wire Reels</title><style>html,body{margin:0;background:#1b2330;height:100%;overflow:hidden;font-family:sans-serif}canvas{display:block;margin:0 auto;touch-action:none}</style>
-</head><body><canvas id="c"></canvas><script src="logic.js"></script><script src="game.js"></script></body></html>
+<link rel="icon" href="data:,"><title>Wire Reels</title><style>
+html,body{margin:0;background:#d9b98a;height:100%;overflow:hidden;font-family:system-ui,sans-serif;-webkit-user-select:none;user-select:none}canvas{display:block;touch-action:none}
+#ui{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(40,25,10,.45)}
+.card{background:#f7ecd6;border:3px solid #a87b4f;border-radius:18px;padding:20px 22px;width:290px;text-align:center;color:#5a3418;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.card.wide{width:340px;max-height:80vh;overflow:auto}.card h2{font-family:Georgia,serif;margin:4px 0 10px}
+.card button{display:block;width:100%;min-height:52px;margin:10px 0 0;font-size:18px;font-weight:bold;border:0;border-radius:12px;background:#e8792b;color:#fff;box-shadow:0 3px 0 #9c4a14}
+.card button.alt{background:#c49a6c;box-shadow:0 3px 0 #7b5530}
+.stars{font-size:46px;letter-spacing:6px;color:#d9c7a6}.stars .on{color:#f2b82a;text-shadow:0 2px 0 #b07a10}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.grid .lv{margin:0;min-height:72px;font-size:20px;padding:4px 2px;background:#5b6470;box-shadow:0 3px 0 #2c3036}
+.grid .lv small{display:block;font-size:9px;font-weight:normal;line-height:1.1}.grid .lv i{display:block;font-style:normal;font-size:11px;color:#ffd23a;min-height:13px}.grid .lv:disabled{opacity:.4}
+#mb{display:block;margin:0 auto}</style></head><body><canvas id="c"></canvas><div id="ui"></div>
+<script src="pictures.js"></script><script src="logic.js"></script><script src="levels.js"></script><script src="game.js"></script></body></html>
